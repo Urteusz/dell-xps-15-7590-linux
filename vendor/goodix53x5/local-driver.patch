@@ -1,0 +1,60 @@
+diff --git a/drivers/goodix53x5/goodix53x5.c b/drivers/goodix53x5/goodix53x5.c
+index 1e8c4b5..7829fe8 100644
+--- a/drivers/goodix53x5/goodix53x5.c
++++ b/drivers/goodix53x5/goodix53x5.c
+@@ -1347,6 +1347,32 @@ goodix_enroll_ssm_handler (FpiSsm   *ssm,
+ 
+     case GOODIX_ENROLL_PROCESS:
+       {
++        /* Quality gate: reject captures with too few SIFT keypoints.
++         * Low keypoint count means the image is blurry, partial, or the
++         * finger wasn't placed properly — useless for matching later. */
++        SigfmImgInfo *quality_info = sigfm_extract (self->captured_image,
++                                                     GOODIX_SENSOR_WIDTH,
++                                                     GOODIX_SENSOR_HEIGHT);
++        int keypoints = sigfm_keypoints_count (quality_info);
++        sigfm_free_info (quality_info);
++
++        fp_dbg ("Enrollment stage %d keypoints: %d (min required: %d)",
++                self->enroll_stage + 1, keypoints, GOODIX_ENROLL_MIN_KEYPOINTS);
++
++        if (keypoints < GOODIX_ENROLL_MIN_KEYPOINTS)
++          {
++            fp_info ("Enrollment capture rejected: %d keypoints < %d minimum",
++                     keypoints, GOODIX_ENROLL_MIN_KEYPOINTS);
++            g_clear_pointer (&self->captured_image, g_free);
++            /* Report retry — enroll_stage is NOT incremented so the loop
++             * in GOODIX_ENROLL_NEXT will repeat this stage automatically. */
++            fpi_device_enroll_progress (dev, self->enroll_stage, NULL,
++                                         fpi_device_retry_new_msg (FP_DEVICE_RETRY_CENTER_FINGER,
++                                                                   "Press finger firmly and centered"));
++            fpi_ssm_next_state (ssm); /* → GOODIX_ENROLL_WAIT_FINGER_UP */
++            return;
++          }
++
+         /* Store captured image in enrollment array */
+         g_ptr_array_add (self->enroll_images, self->captured_image);
+         self->captured_image = NULL;
+diff --git a/drivers/goodix53x5/goodix53x5.h b/drivers/goodix53x5/goodix53x5.h
+index 4afc504..779988d 100644
+--- a/drivers/goodix53x5/goodix53x5.h
++++ b/drivers/goodix53x5/goodix53x5.h
+@@ -50,10 +50,15 @@ G_DECLARE_FINAL_TYPE (FpiDeviceGoodix53x5, fpi_device_goodix53x5, FPI,
+ /* Enroll stages */
+ #define GOODIX_ENROLL_SAMPLES 8
+ 
++/* Minimum SIGFM keypoints to accept an enrollment capture.
++ * Captures below this threshold are too blurry/partial to be useful
++ * and trigger a retry request. */
++#define GOODIX_ENROLL_MIN_KEYPOINTS 20
++
+ /* SIGFM (SIFT-based) matching parameters */
+-#define GOODIX_SIGFM_THRESHOLD    10   /* minimum sigfm score to count as matching */
+-#define GOODIX_SIGFM_BEST_MIN     40   /* minimum best score from any single sample */
+-#define GOODIX_SIGFM_MIN_SAMPLES  2    /* minimum enrolled samples above threshold */
++#define GOODIX_SIGFM_THRESHOLD    3    /* minimum sigfm score to count as matching */
++#define GOODIX_SIGFM_BEST_MIN     5    /* minimum best score from any single sample */
++#define GOODIX_SIGFM_MIN_SAMPLES  1    /* minimum enrolled samples above threshold */
+ 
+ /* Sensor warmup parameters */
+ #define GOODIX_WARMUP_CAPTURES      5    /* pre-touch captures after resume */

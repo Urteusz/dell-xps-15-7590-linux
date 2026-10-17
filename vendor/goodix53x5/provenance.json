@@ -1,0 +1,9 @@
+{
+  "upstream": "https://github.com/AndyHazz/goodix53x5-libfprint",
+  "commit": "399057b6ae97b80135e58b96e569f0f3a10532f5",
+  "snapshot": "local working tree, including two modified driver files; local-driver.patch documents changes already included",
+  "libfprint_upstream": "https://gitlab.freedesktop.org/libfprint/libfprint.git",
+  "libfprint_commit": "ee422fc3c5feae6e3bc290a23f0c625dcb934189",
+  "license": "LGPL-2.1-or-later; see upstream credits for SIGFM",
+  "status": "experimental; not installed by setup.py"
+}

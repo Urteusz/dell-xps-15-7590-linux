@@ -1,0 +1,40 @@
+{
+  "fedora_release": "43",
+  "arch": "x86_64",
+  "model": "XPS 15 7590",
+  "profiles": {
+    "base": [
+      "kernel",
+      "kernel-modules",
+      "kernel-modules-extra",
+      "linux-firmware",
+      "microcode_ctl",
+      "mesa-dri-drivers",
+      "mesa-vulkan-drivers",
+      "pipewire",
+      "pipewire-alsa",
+      "pipewire-pulseaudio",
+      "wireplumber",
+      "alsa-sof-firmware",
+      "bluez",
+      "bluez-tools",
+      "bolt",
+      "fwupd",
+      "libinput"
+    ],
+    "nvidia": [
+      "akmod-nvidia",
+      "xorg-x11-drv-nvidia",
+      "xorg-x11-drv-nvidia-cuda",
+      "kernel-devel-matched"
+    ],
+    "tools": [
+      "pciutils",
+      "usbutils",
+      "glx-utils",
+      "v4l-utils",
+      "libva-utils",
+      "dnf5-plugins"
+    ]
+  }
+}
