@@ -1,21 +1,47 @@
-# Testy funkcjonalne
+# Functional validation
 
-`python3 scripts/diagnose.py --output reports/local.json` nie zmienia konfiguracji, nie rejestruje dźwięku ani obrazu, nie wykonuje logowania i nie usypia komputera. Kod wyjścia 1 oznacza wykryte ostrzeżenia; 0 nie oznacza pełnej sprawności. UNKNOWN oznacza brak dowodu, np. brak narzędzia lub ograniczone uprawnienia; MANUAL wymaga testu użytkowego. Uruchom w zwykłym terminalu sesji graficznej, nie przez sudo.
+Run diagnostics in a normal terminal inside your desktop session:
 
-| Funkcja | Test ręczny | Kryterium |
-|---|---|---|
-| Audio | Odtwórz dźwięk w ustawieniach KDE; powtórz dla słuchawek | Oba kanały, brak trzasków, przełączenie wyjścia |
-| Mikrofon | Nagraj próbkę w wybranej aplikacji | Czytelny zapis i właściwe źródło |
-| Kamera | Otwórz podgląd w aplikacji kamery | Płynny obraz, poprawne zezwolenia |
-| Bluetooth | Sparuj znane słuchawki lub mysz | Działa i łączy się ponownie |
-| Touchpad | Ruch, tap, dwa/trzy palce przez kilka minut | Brak skoków; sprawdź logi KWin/libinput |
-| Jasność i Fn | Regulacja jasności, głośności, klawisze funkcyjne | Poprawna reakcja i zakres |
-| Uśpienie | Zapisz pracę, uśpij, wznowij; sprawdź Wi-Fi, audio, obie grafiki | Powtarzalne wznowienie; zapisz wybrane `/sys/power/mem_sleep` |
-| HDMI/USB-C | Podłącz monitor; sprawdź obraz i dźwięk | Właściwa rozdzielczość, odłączanie i ponowne łączenie |
-| Thunderbolt | Podłącz znaną stację i autoryzuj w KDE/bolt, jeśli wymagane | Monitor, USB i sieć stacji działają |
-| SD | Użyj sprawnej karty testowej bez ważnych danych | Zapis/odczyt i bezpieczne wysunięcie; obecna karta ma błędy FAT |
-| NVIDIA | PRIME OpenGL i następnie znana aplikacja 3D | Renderuje; brak nowych NV_ERR_NO_MEMORY lub Xid |
-| Bateria | Obserwuj rozładowanie i ładowanie przy zwykłej pracy | Wiarygodny odczyt, brak niespodziewanych wyłączeń |
-| Fingerprint | Zapisany palec i niewłaściwy palec po zimnym starcie | Poprawne dopasowanie i odrzucenie; patrz FINGERPRINT.md |
+```bash
+python3 scripts/diagnose.py --output reports/local.json
+```
 
-Nie wymuszaj trybu deep, undervoltingu, ręcznych wentylatorów lub blacklist bez odtworzenia konkretnego problemu. Hibernacja zależy również od swap i konfiguracji resume; nie jest automatycznie zapewniona przez pakiet sterowników.
+The script reads device and service state. It does not record audio/video, authenticate fingerprints, suspend the computer, or modify configuration.
+
+| Status | Meaning |
+| --- | --- |
+| `PASS` | The specific reported check passed; not a full component certification. |
+| `WARN` | A driver discrepancy or selected error marker was found. |
+| `UNKNOWN` | Evidence unavailable, for example missing tools or restricted access. |
+| `SKIP` | The expected hardware variant was absent. |
+| `MANUAL` | Functional testing is required. |
+
+Exit code 1 indicates warnings. Exit code 0 does not establish complete hardware support.
+
+## Checklist
+
+| Function | Check |
+| --- | --- |
+| Audio | Test both speaker channels, headphones, input switching, and a microphone recording. |
+| Camera | Open a live preview and confirm permissions and stable streaming. |
+| Bluetooth | Pair a known device and verify reconnection and sustained use. |
+| Touchpad | Test movement, taps, scrolling, and gestures; inspect libinput/KWin logs for jumps. |
+| Brightness / Fn | Check brightness range and all relevant hotkeys. |
+| Suspend | Save work, suspend and resume; retest Wi-Fi, sound, and both GPUs. Record `/sys/power/mem_sleep`. |
+| External displays | Verify resolution, audio, unplug/replug, HDMI and USB-C separately. |
+| Thunderbolt | Connect and authorize a known dock, then test its display, USB, and network functions. |
+| SD / USB storage | Use healthy test media without important data; verify read/write and safe removal. |
+| NVIDIA | Run the PRIME check followed by a known 3D workload; look for new Xid or memory errors. |
+| Battery | Observe charging, discharge reporting, and runtime under normal use. |
+| Fingerprint | Test enrolled and unenrolled fingers after cold boot, restart, and screen unlock. |
+
+Hibernation also depends on swap and resume configuration. Do not apply unrelated kernel parameters or tuning changes without reproducing a specific issue.
+
+## Script checks
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m compileall -q scripts
+```
+
+These check the package workflow, bundle integrity handling, and guarded PAM edits. They do not replace hardware tests.

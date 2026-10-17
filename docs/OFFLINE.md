@@ -1,27 +1,29 @@
-# Paczka RPM offline
+# Offline installation
 
-Repozytorium Git zawiera przepisy i źródła Goodix. Binaria Fedory i NVIDIA są pobierane osobno do ignorowanego katalogu `offline/`. Przygotuj paczkę na Fedora 43 x86_64 z włączonymi repozytoriami Fedora i RPM Fusion:
+Prepare the bundle on Fedora 43 x86_64 with Fedora and RPM Fusion repositories enabled. The `dnf download` command requires `dnf5-plugins`.
 
 ```bash
 python3 scripts/setup.py download
 python3 scripts/setup.py download --apply
 ```
 
-Wymagany jest podrozkaz `dnf download` (pakiet `dnf5-plugins`). `--resolve --alldeps` pobiera także zależności już obecne na maszynie przygotowującej paczkę. Słabe zależności są wyłączone podczas pobierania. Przygotowanie może zużyć kilka GB. Otrzymujesz `offline/fedora-43-x86_64/*.rpm` i `bundle.json` z dokładnymi nazwami plików oraz SHA256. Nie kopiuj samych RPM bez manifestu. Przy błędzie pobierania katalog nie jest kompletną paczką; ponów w nowym pustym katalogu przez `--directory`.
+The output directory is `offline/fedora-43-x86_64/`. It contains RPM packages and `bundle.json` with package filenames and SHA256 checksums. Downloads include required dependencies even when already installed; weak dependencies are excluded. Allow several GB of free space.
 
-Skopiuj repozytorium i katalog offline na docelowy laptop, potem:
+Use an empty output directory. To retry an interrupted download without overwriting it:
+
+```bash
+python3 scripts/setup.py download --directory offline/retry --apply
+```
+
+Copy the repository and the complete bundle to the target laptop. Fedora and RPM Fusion signing keys must already be trusted on that system. Then run:
 
 ```bash
 python3 scripts/setup.py offline-install
 python3 scripts/setup.py offline-install --apply
 ```
 
-Instalacja sprawdza sumy plików, wyłącza zdalne repozytoria i wymaga weryfikacji podpisów lokalnych RPM przez DNF. Klucze Fedora/RPM Fusion muszą już być zaufane w systemie docelowym; skonfiguruj je przed odłączeniem sieci. SHA256 wykrywa uszkodzenie pliku, ale nie zastępuje podpisu wydawcy. Nie obchodź błędu zaufania przez `--nogpgcheck`.
+For a custom directory, pass the same `--directory` option. The installer checks file hashes, disables remote repositories, and requires local RPM signature verification. Checksums detect corruption; package signatures establish provenance.
 
-Pakiet jest przeznaczony dla tej samej wersji Fedory i architektury. Zmodyfikowany system docelowy może mieć dodatkowe zależności lub konflikty. Pobieranie sprawdza kompletność plików, ale pełną instalację offline trzeba sprawdzić na czystej Fedora 43; na używanym laptopie jej nie wykonano.
+Bundles target the same Fedora release and architecture. An existing customized installation may have additional dependencies or conflicts. Boot the kernel installed by the bundle before validating its NVIDIA module. Goodix remains a separate source-based integration.
 
-Pakiety kernela i `kernel-devel-matched` są pobierane z aktualnych repozytoriów. Po instalacji uruchom nowo zainstalowany kernel. Nie oczekuj zgodności z dawnym kernelem, dla którego repozytoria nie udostępniają już nagłówków. Goodix pozostaje osobnym eksperymentalnym źródłem, nie jest częścią transakcji RPM.
-
-## Paczka przygotowana na tym laptopie
-
-2026-10-17 pobrano **648 RPM** do `offline/fedora-43-x86_64/` (około 1,2 GB). Pakiety pochodzą z dostępnych w chwili pobierania repozytoriów, więc nie muszą mieć tych samych wersji co aktualnie uruchomiony system. `bundle.json` zawiera pełną listę i SHA256. Wykonano kontrolę sum oraz podpisów RPM. Nie przeprowadzono instalacji na czystym systemie ani restartu do kernela z paczki. Pliki binarne pozostają lokalne i są ignorowane przez Git.
+The reference bundle's 648 RPM files passed checksum and signature verification. A clean-system offline installation has not been tested. Binary bundles are not included in the Git repository.

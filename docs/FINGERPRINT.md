@@ -1,14 +1,16 @@
-# Goodix HTK32 27c6:5395 — eksperymentalny
+# Goodix fingerprint reader
 
-Urządzenie nie występuje na sprawdzonej 2026-10-17 liście wspieranych urządzeń upstream libfprint. Na tym laptopie działa własna kompilacja libfprint 1.94.10 z rozszerzeniem Goodix53x5/SIGFM. Systemowy RPM `libfprint` ma inną wersję; sama lista RPM nie odzwierciedla biblioteki załadowanej przez usługę.
+Sensor: **Goodix HTK32, USB `27c6:5395`**. Support uses an experimental custom libfprint driver with SIGFM matching. This ID was absent from the upstream libfprint supported-device list when checked on October 17, 2026.
 
-Usługa ma lokalny drop-in `/etc/systemd/system/fprintd.service.d/custom-libfprint.conf` ustawiający `LD_LIBRARY_PATH=/usr/local/lib64` i `G_MESSAGES_DEBUG=all`. Reguła `/etc/udev/rules.d/91-goodix-fingerprint.rules` odłącza `cdc_acm` od tego czytnika. Log potwierdza start niestandardowego sterownika. Nie kopiujemy wzorców palców ani obrazów z `/var/lib/fprint`.
+## Source snapshot
 
-## Zachowane źródła
+`vendor/goodix53x5/` preserves the reference machine's driver sources and local modifications. See `provenance.json` for upstream URLs and exact commits.
 
-`vendor/goodix53x5/` zawiera kopię lokalnego drzewa sterownika, łącznie ze zmianami użytkownika. Pochodzenie i dokładne commity: `provenance.json`. `local-driver.patch` dokumentuje zmiany już obecne w skopiowanych plikach — nie nakładaj go ponownie. `libfprint-integration.patch` to zmiany integracyjne lokalnego drzewa libfprint.
+- `local-driver.patch` records changes already included in the copied sources. Do not apply it again.
+- `libfprint-integration.patch` integrates the driver and SIGFM into the pinned libfprint source tree.
+- Original source headers, README, and license notices are retained.
 
-Odtworzenie drzewa do kompilacji, bez instalacji:
+Prepare the source tree from the repository root:
 
 ```bash
 git clone https://gitlab.freedesktop.org/libfprint/libfprint.git build/libfprint
@@ -18,41 +20,44 @@ cp -r vendor/goodix53x5/drivers/goodix53x5 build/libfprint/libfprint/drivers/
 cp -r vendor/goodix53x5/sigfm build/libfprint/libfprint/
 ```
 
-Wymagania kompilacji: Meson, Ninja, kompilatory C/C++, GLib, libgusb, OpenSSL i OpenCV development oraz zależności wybranego zestawu libfprint. To materiał do odtworzenia eksperymentu, nie gotowy przetestowany RPM; główny instalator nie nadpisuje systemowego libfprint. W aktualnym upstream projektu Goodix są dalsze zmiany; snapshot zachowuje faktyczny lokalny stan, bez twierdzenia że jest najnowszy.
+Build requirements include Meson, Ninja, C/C++ compilers, GLib, libgusb, OpenSSL, OpenCV development packages, and dependencies of the selected libfprint drivers. Follow the bundled [upstream README](../vendor/goodix53x5/README.md) for build integration. The snapshot is not a tested, distribution-ready RPM and is not installed by `setup.py`.
 
-## Opóźnienie hasła i pierwsze logowanie
+The reference installation loads its custom library from `/usr/local/lib64` through an `fprintd` service override. A bundled udev rule prevents `cdc_acm` from claiming the sensor. Review both against your distribution before installation. Newer upstream Goodix revisions may differ from this preserved snapshot.
 
-PAM w `/etc/pam.d/sddm` zawiera samodzielne `auth sufficient pam_fprintd.so` **przed** `password-auth`. Domyślny timeout modułu wynosi 30 s. PAM wykonuje ten stos kolejno, więc wpisane hasło czeka na zakończenie próby czytnika. W tej konfiguracji odczyt palca uruchamia się dopiero w trakcie próby logowania SDDM; samo dotykanie czytnika przed rozpoczęciem próby nie oznacza aktywnego skanowania. Blokada ekranu KDE ma osobny stos `kde-fingerprint`, dlatego jej zachowanie może być inne. Dokumentuje to lokalne `man pam_fprintd` i [zgłoszenie SDDM #1840](https://github.com/sddm/sddm/issues/1840).
+## SDDM password delay
 
-Potwierdzona chronologia ostatniego startu:
+A standalone `pam_fprintd.so` rule before `password-auth` causes SDDM to wait for fingerprint verification before checking a password. The default timeout is 30 seconds. This PAM stack processes authentication sequentially; KDE screen unlocking uses a separate fingerprint stack.
 
-- 23,219 s od startu: Claim urządzenia; 23,885 s: otwarcie zakończone.
-- 23,894 s: rozpoczęcie weryfikacji; brak wykrytego dotknięcia w oczekiwaniu FDT.
-- 53,890 s: timeout SDDM; 54,393 s: sesja użytkownika otwarta.
-- 246,148 s: kolejna weryfikacja; 250,749 s: `verify-match`.
+On the reference machine, four recorded boots showed 30-second timeouts, including two attempts during one boot. Sensor initialization took less than a second. A later verification matched successfully. The reported three-to-four-minute continuous password delay was not established by these logs.
 
-W trzech wcześniejszych rozruchach widać analogiczne timeouty 30 s; w jednym dwie próby. **Nie potwierdzono 3–4 minut ciągłego sprawdzania hasła**. Brak dotknięcia w logu nie rozstrzyga, czy użytkownik dotykał czujnika przed jego uzbrojeniem, czy sterownik nie wykrył dotknięcia po zimnym starcie. Potrzebny test fizyczny.
-
-Przygotowana i zastosowana na badanym laptopie poprawka ogranicza pojedynczą próbę SDDM do 8 s i jednej próby. Nie naprawia samej przyczyny niewykrywania palca po zimnym starcie i nie gwarantuje 8 s całego logowania; czas dotyczy etapu weryfikacji modułu PAM.
+For the expected existing SDDM configuration, preview and apply the bounded-wait fix:
 
 ```bash
-python3 scripts/fix-login.py                 # pokaż dokładną zmianę
-sudo python3 scripts/fix-login.py --apply    # kopia i zapis; wymaga hasła administratora
+python3 scripts/fix-login.py
+sudo python3 scripts/fix-login.py --apply
 ```
 
-Alternatywa, gdy chcesz natychmiastowe logowanie hasłem i zachować odblokowanie KDE palcem: `sudo python3 scripts/fix-login.py --mode password --apply`. Usuwa próbę palca tylko z SDDM, pozostawiając `kde-fingerprint` i authselect. Nie uruchamiaj alternatywy po trybie password ponownie — skrypt celowo wymaga dokładnie jednej oczekiwanej reguły przed zmianą.
+This sets `timeout=8 max-tries=1`, preserves password fallback, and prints the backup path and restore command. It changes only the standalone SDDM fingerprint rule and refuses unexpected configurations. The limit applies to the verification stage, not the complete login process. It does not resolve the underlying cold-boot recognition issue.
 
-Nie restartuj SDDM podczas pracy — zakończyłoby to sesję. Test przy następnym normalnym uruchomieniu. Kopia i polecenie cofnięcia są wypisywane przez skrypt. Nie zmieniono generowanych przez authselect plików system-auth/password-auth.
+For password-only SDDM login while retaining the separate KDE fingerprint stack:
 
-## Test palca po zimnym starcie
+```bash
+sudo python3 scripts/fix-login.py --mode password --apply
+```
 
-1. Nie trzymaj palca na przycisku po włączeniu laptopa. Poczekaj na ekran logowania, rozpocznij próbę i dopiero wtedy przyłóż zapisany palec.
-2. Zanotuj wynik i czas. Po zalogowaniu uruchom `python3 scripts/login-timeline.py`; pokazuje czasy etapów bez kont i surowych danych czytnika. Szczegóły: `journalctl -b -u sddm -u fprintd -o short-monotonic`.
-3. Uruchom `fprintd-verify`, poczekaj na komunikat i przyłóż zapisany palec. Sprawdź też, że inny palec zostaje odrzucony. Nie wklejaj do publicznych raportów danych wzorców lub obrazów.
-4. Porównaj pełne wyłączenie/włączenie z restartem i odblokowaniem ekranu. Dopiero takie wyniki pozwalają ocenić poprawkę sterownika.
+Choose one mode. The password-only change removes the rule, so running the fixer again requires restoring the original configuration first. Test on the next normal login; restarting SDDM would end the current session.
 
-SELinux zgłasza odmowy odczytu `nr_hugepages` przez fprintd; pojedyncze dopasowanie pomimo tego się powiodło. Nie dowodzi to przyczyny opóźnienia. Najpierw przeanalizuj AVC i etykiety biblioteki. Nie generuj bez przeglądu reguł `audit2allow` i nie wyłączaj SELinux. Dobór progów biometrycznych i instalacja nowego sterownika wymagają osobnej walidacji; snapshot nie jest rekomendacją do ochrony ważnych danych.
+## Verify recognition
 
-## Stan zastosowania poprawki
+1. After a cold boot, keep your finger off the power button until the login screen is ready. Start a login attempt, then touch the enrolled finger to the sensor.
+2. After login, inspect timings:
 
-2026-10-17 zmieniono wyłącznie regułę czytnika w `/etc/pam.d/sddm` na `pam_fprintd.so timeout=8 max-tries=1`. Odczyt pliku po zapisie potwierdził zmianę; `authselect check` zwraca poprawną konfigurację. Kopia: `/var/backups/xps7590-login/sddm.20261017T100431216628Z`. Nie wykonano restartu ani pełnego testu logowania. Skrypt i przypadki odrzucające nieoczekiwane konfiguracje przeszły testy automatyczne.
+   ```bash
+   python3 scripts/login-timeline.py
+   python3 scripts/login-timeline.py --boot -1
+   ```
+
+3. Run `fprintd-verify` and check that the enrolled finger matches and an unenrolled finger is rejected.
+4. Compare cold boot, restart, and screen unlock. Do not publish biometric images or templates.
+
+Cold-boot recognition after the timeout change has not been verified. The reference system also logged SELinux denials involving `nr_hugepages`; a later match succeeded despite these denials. Review AVC records and library labels before changing policy. Do not disable SELinux or change biometric thresholds as an unvalidated workaround.

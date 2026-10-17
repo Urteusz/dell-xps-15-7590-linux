@@ -1,38 +1,79 @@
-# Dell XPS 15 7590 — Linux kit
+# Dell XPS 15 7590 Linux Support Kit
 
-Zestaw instalacyjny i diagnostyczny dla **Dell XPS 15 7590**, przygotowany na fizycznym laptopie z **Fedora 43 KDE, Intel i7-9750H, UHD 630, GTX 1650, Killer AX1650x / Intel AX200**. Dokumentacja po polsku. Stan weryfikacji: **2026-10-17**.
+Driver setup, hardware diagnostics, and Goodix fingerprint integration for the **Dell XPS 15 7590** running **Fedora 43 KDE (x86_64)**.
 
-Sterowniki większości urządzeń dostarcza kernel Linux. Repozytorium zawiera manifest pakietów, instalator, generator paczki RPM offline, diagnostykę oraz zachowaną eksperymentalną wersję sterownika Goodix. Nie jest uniwersalnym instalatorem dla wszystkich dystrybucji ani gwarancją działania każdego wariantu 7590.
+Most hardware uses drivers included in Linux. This kit brings together the required packages, NVIDIA setup, offline package downloads, and a snapshot of the experimental Goodix driver.
 
-## Szybki start
+## Hardware support
 
-W katalogu repozytorium, jako zwykły użytkownik:
+Validated on an Intel Core i7-9750H configuration with UHD 630, GTX 1650, and Killer AX1650x / Intel AX200. Last checked: **October 17, 2026**.
+
+| Component | Driver | Validation |
+| --- | --- | --- |
+| Intel UHD 630 | `i915`, Mesa | Accelerated OpenGL verified |
+| NVIDIA GTX 1650 | `nvidia`, RPM Fusion akmods | Driver API and PRIME OpenGL verified |
+| Wi-Fi AX200 / AX1650x | `iwlwifi` | Connected successfully |
+| Bluetooth | `btusb`, `btintel` | Firmware loaded; controller enabled |
+| Audio | `snd_hda_intel`, PipeWire | Playback and capture devices detected |
+| Webcam | `uvcvideo` | V4L2 and PipeWire devices detected |
+| Touchpad | I2C HID, libinput | Detected; intermittent cursor jumps logged |
+| SD reader, NVMe, Thunderbolt | Kernel drivers | Controllers detected and bound |
+| Goodix `27c6:5395` | Custom libfprint / SIGFM | Successful match observed; experimental |
+
+Detection does not establish full functional coverage. Cold-boot fingerprint login, suspend/resume, external displays, peripherals, audio playback/capture, and camera streaming still require testing. See the [validation report](docs/VERIFIED-2026-10-17.md) for known issues.
+
+## Quick start
+
+Clone or download this repository, open its directory, and run commands as your normal user. Requirements: Fedora 43 x86_64, Python 3, DNF5, and administrator access for installation.
+
+1. Configure [RPM Fusion](https://rpmfusion.org/Configuration) for NVIDIA packages.
+2. Review the package selection and installation command:
+
+   ```bash
+   python3 scripts/setup.py plan
+   python3 scripts/setup.py install
+   ```
+
+3. Install the packages and finish the NVIDIA module build:
+
+   ```bash
+   python3 scripts/setup.py install --apply
+   sudo akmods --force
+   ```
+
+   Follow [installation instructions](docs/INSTALL.md) for Secure Boot and reboot verification. Goodix installation is separate.
+
+4. Check your hardware:
+
+   ```bash
+   python3 scripts/diagnose.py --output reports/local.json
+   ```
+
+The installer checks the laptop model, Fedora release, and architecture. Commands preview changes unless `--apply` is supplied. Package installation retains DNF's confirmation prompt. Script messages currently include Polish text.
+
+## Fingerprint login
+
+The Goodix sensor requires a custom driver. This repository preserves its source snapshot and integration changes; the package installer does not install it automatically. See [Goodix setup and limitations](docs/FINGERPRINT.md).
+
+For an existing Goodix installation, an optional SDDM fix limits fingerprint verification to one attempt with an eight-second timeout before password fallback:
 
 ```bash
-python3 scripts/diagnose.py --output reports/local.json
-python3 scripts/setup.py plan
-python3 scripts/setup.py install            # pokazuje polecenie
-python3 scripts/setup.py install --apply    # instalacja z potwierdzeniem DNF
+python3 scripts/fix-login.py
+sudo python3 scripts/fix-login.py --apply
 ```
 
-Instalator sprawdza model, architekturę i wersję Fedory. Profil domyślny obejmuje bazę, NVIDIA i narzędzia. Wymaga skonfigurowanego RPM Fusion dla NVIDIA: [instalacja](docs/INSTALL.md). Na obecnej maszynie sterowniki już są zainstalowane; nie trzeba ich instalować ponownie do wykonania diagnostyki.
+The fix backs up the SDDM configuration. It limits waiting time; cold-boot recognition remains unverified.
 
-## Zawartość
+## Documentation
 
-- [Wykryty sprzęt i sterowniki](hardware/7590.md).
-- [Rzeczywisty raport z laptopa](docs/VERIFIED-2026-10-17.md), z problemami i granicami testów.
-- [Instalacja, Secure Boot i powrót do poprzedniego kernela](docs/INSTALL.md).
-- [Paczka offline](docs/OFFLINE.md): RPM z zależnościami, wersjami i SHA256.
-- [Goodix 27c6:5395](docs/FINGERPRINT.md): lokalne źródła, pochodzenie i zmiany; instalacja eksperymentalna poza instalatorem głównym.
-- [Testy ręczne](docs/TESTING.md): audio, kamera, suspend, Bluetooth i złącza.
-- [Źródła informacji](docs/SOURCES.md).
+- [Installation and recovery](docs/INSTALL.md)
+- [Offline installation](docs/OFFLINE.md)
+- [Fingerprint integration and login troubleshooting](docs/FINGERPRINT.md)
+- [Hardware IDs](hardware/7590.md)
+- [Validation results](docs/VERIFIED-2026-10-17.md)
+- [Functional test checklist](docs/TESTING.md)
+- [References](docs/SOURCES.md)
 
-**Poprawka logowania:** po zgłoszeniu opóźnienia skrócono oczekiwanie SDDM na palec do 8 s i jednej próby; test po restarcie pozostaje do wykonania. Szczegóły i kopia konfiguracji w [FINGERPRINT.md](docs/FINGERPRINT.md).
+## License
 
-**Nie wszystko można oznaczyć jako sprawne:** NVIDIA ma historyczne błędy pamięci, touchpad zgłasza skoki, a fprintd napotyka odmowy SELinux. Kamera, mikrofon, uśpienie i urządzenia zewnętrzne wymagają testów użytkowych. Raport odróżnia wykrycie sterownika od pełnego testu funkcji.
-
-## Publikacja na GitHubie
-
-Repozytorium jest lokalne, bez remote. `offline/`, `reports/` i katalogi kompilacji są ignorowane. Przygotowana lokalna paczka offline zawiera 648 RPM i zajmuje około 1,2 GB. Paczki RPM mogą zajmować dużo miejsca — udostępniaj je osobno jako archiwum lub Release po sprawdzeniu warunków dystrybucji pakietów. Kod główny: MIT; źródła `vendor/goodix53x5/` mają odrębne warunki LGPL i zachowane autorstwo. Zobacz [THIRD_PARTY.md](THIRD_PARTY.md).
-
-Sprawdzenie skryptów: `python3 -m unittest discover -s tests -v`.
+Project scripts and documentation: [MIT](LICENSE). Bundled Goodix/SIGFM sources retain their upstream licensing and attribution; see [third-party notices](THIRD_PARTY.md).
